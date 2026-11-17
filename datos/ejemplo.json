@@ -1,0 +1,110 @@
+{
+  "dias": [
+    {
+      "numero": 1,
+      "semana": {"del": "30", "al": "3", "de": "octubre"},
+      "grupal": {
+        "pequeno": {
+          "titulo": "Actividad Grupal (Expresión plástica)",
+          "actividad": ["CONTINUACION DE LA DIAGNOSTICA"],
+          "recursos": ["hojas blancas", "copias", "colores", "láminas"]
+        },
+        "grande": {
+          "actividad": ["La docente les explica que van a realizar un coloreado en su libro de colorear. Se le entrega su libro, matizando que trabajen despacio, para que su trabajo les quede bonita. Para finalizar muestran su trabajo. Felicidades. Coloca el libro y colores en su lugar."],
+          "recursos": ["Libro de colorear", "colores"]
+        },
+        "actividad_grupal": {
+          "titulo": "Actividad Grupal (Expresión Plástica).",
+          "actividad": [
+            "La docente le dice a los niños que vamos a salir al patio, para imitar el baile y hacer las diferentes posiciones que vaya diciendo la canción, luego jugaremos Simón dice todos juntos en el patio.",
+            "Para finalizar le pregunta cómo se sintieron, ¿les gustó la actividad?"
+          ],
+          "recursos": ["Cuaderno", "Colores", "Lápiz de carbón"]
+        }
+      },
+      "hoja2": {
+        "indicador": "Cumplen con sus deberes realizando las actividades escolares que les son solicitadas.",
+        "actividad": [
+          "Sentados en círculo junto a la docente entonamos una canción de saludo.",
+          "Cantamos todos, luego hacemos uso de los diferentes carteles fijos del aula, reflexionando sobre cómo y para qué los usamos, así como con las fichas de sus nombres.",
+          "Preguntamos qué hicimos ayer y los niños responden.",
+          "Luego conversamos sobre las normas del aula preguntando si saben cuáles son, a lo que responden a la pregunta.",
+          "Después colocamos un video de la canción de las normas para ver y escuchar en silencio, con el fin de socializar lo aprendido.",
+          "Para finalizar, todos entonamos la canción."
+        ],
+        "recursos": ["Carteles", "Fichas de nombres", "Canciones"]
+      }
+    },
+    {
+      "numero": 2,
+      "semana": {"del": "30", "al": "3", "de": "octubre"},
+      "grupal": {
+        "pequeno": {
+          "titulo": "Actividad Grupal (Expresión plástica)",
+          "actividad": ["CONTINUACION DE LA DIAGNOSTICA"],
+          "recursos": []
+        },
+        "grande": {
+          "actividad": [
+            "Se les explica que van a colorear la imagen que observaron en el encuentro de grupo.",
+            "Le entrega la hoja (copia) donde colorean y colocan el nombre como puedan, usando la ficha de su nombre.",
+            "Motivar a colorear despacio y sin salirse del contorno."
+          ],
+          "recursos": ["copia", "colores", "lápiz de carbón"]
+        },
+        "actividad_grupal": {
+          "titulo": "Actividad Grupal (Expresión Plástica).",
+          "actividad": ["La docente les dice que van a realizar un dibujo libre, en su cuaderno de artística, motiva a mantener el silencio en la actividad para que sea más linda su producción. Muestran su trabajo a la maestra y se coloca el cuaderno en el estante. Cantamos juntos la canción \"inventa un nombre\". Les gusta."],
+          "recursos": ["cuaderno", "colores", "lápiz de carbón"]
+        }
+      },
+      "hoja2": {
+        "indicador": "Comunica sus ideas, pensamiento, emociones y experiencias, con la intención de que otro comprenda el mensaje.",
+        "actividad": [
+          "La maestra entona canciones de saludos \"muy buenos días vamos a pasar...\"",
+          "Saludo a cada niño/a individual diciendo su nombre, uso de los diferentes carteles fijos del aula.",
+          "Retroalimentación del día anterior, dejar que los niños se expresen.",
+          "Motivar a que observen la imagen y luego que respondan las siguientes preguntas:",
+          "• ¿Qué hacen los niños en la imagen?",
+          "• ¿Cómo están vestidos?",
+          "Para finalizar escuchamos la Canción de la Rosa."
+        ],
+        "recursos": ["Canción", "nombre", "pizarra", "borrador", "lámina"]
+      }
+    },
+    {
+      "numero": 4,
+      "semana": {"del": "30", "al": "3", "de": "octubre"},
+      "grupal": {
+        "pequeno": {
+          "titulo": "Actividad Grupal (Expresión plástica)",
+          "actividad": ["Trabajar el vocabulario del tema con palabras en fichas: bloque, pizarra, masilla, silla, lápiz, escuela"],
+          "recursos": ["hojas blancas", "copias", "colores", "láminas"]
+        },
+        "grande": {
+          "actividad": ["Dibuja tu escuela en el cuaderno."],
+          "recursos": ["Tarea: Recorta y pega, útiles escolares. Luego escríbele su nombre al lado de cada útil."]
+        },
+        "actividad_grupal": {
+          "titulo": "Actividad Grupal (Expresión Plástica).",
+          "actividad": ["La maestra motiva a los niños a que escriban el nombre de la escuela que está escrito en la pizarra por la maestra, luego les entrega su cuaderno, lápiz, borra para realizar la escritura Ramón Matías Mella, luego se le muestran su trabajo a la maestra y firman su producción, se felicita por su lindo trabajo."],
+          "recursos": ["Cuaderno", "Colores", "Lápiz de carbón"]
+        }
+      },
+      "hoja2": {
+        "indicador": "Formular y responden a preguntas para obtener información sobre tema de su interés.",
+        "contenidos": {
+          "conceptuales": ["La Conversación."],
+          "procedimentales": ["Responden a preguntas orales relacionadas con la conversación."],
+          "actitudinales": ["Interés por comunicar mensajes."]
+        },
+        "actividad": [
+          "Presentación del tema mediante una conversación sobre la escuela, sus instalaciones y las personas que forman parte de ella.",
+          "Los participantes conversarán sobre las diferentes áreas de la escuela, como las aulas, la biblioteca, la dirección y la cafetería.",
+          "Reflexión sobre la importancia de la escuela para el aprendizaje y la convivencia."
+        ],
+        "recursos": ["carteles", "pizarra", "borrador", "Cinta pegante", "Imágenes de la Escuela"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,305 @@
+"""Generador de planificaciones en Word (.docx).
+
+Recibe datos (diccionarios de Python, normalmente cargados desde un JSON)
+y produce un documento con el diseño que exige la escuela:
+hoja apaisada, Times New Roman, encabezados azul claro y tablas con borde.
+
+Cada día de clase genera DOS hojas:
+  1) "Experiencia Grupal": tabla de actividades grupales con recursos.
+  2) Hoja del indicador de logro (3 columnas, o 4 si lleva contenidos).
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from docx import Document
+from docx.enum.section import WD_ORIENT
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Pt, Twips
+
+# ---------------------------------------------------------------------------
+# Constantes de diseño (medidas tomadas del Word original, en "twips":
+# 1 twip = 1/1440 de pulgada)
+# ---------------------------------------------------------------------------
+FUENTE = "Times New Roman"
+TAMANO = Pt(16)
+COLOR_ENCABEZADO = "C5D6EE"
+
+ANCHO_PAGINA = 15840  # carta apaisada
+ALTO_PAGINA = 12240
+MARGEN_LATERAL = 360
+MARGEN_SUPERIOR = 880
+MARGEN_INFERIOR = 280
+SANGRIA_TABLA = 279
+
+COLS_GRUPAL = (11482, 3260)
+COLS_INDICADOR = (3224, 7519, 3332)
+COLS_INDICADOR_CONTENIDOS = (2569, 3641, 5370, 2895)
+
+
+# ---------------------------------------------------------------------------
+# Utilidades de bajo nivel (python-docx no cubre todo, así que tocamos el XML)
+# ---------------------------------------------------------------------------
+def _sombrear(celda, color: str) -> None:
+    tc_pr = celda._tc.get_or_add_tcPr()
+    shd = OxmlElement("w:shd")
+    shd.set(qn("w:val"), "clear")
+    shd.set(qn("w:color"), "auto")
+    shd.set(qn("w:fill"), color)
+    tc_pr.append(shd)
+
+
+def _bordes_tabla(tabla) -> None:
+    tbl_pr = tabla._tbl.tblPr
+    bordes = OxmlElement("w:tblBorders")
+    for lado in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        el = OxmlElement(f"w:{lado}")
+        el.set(qn("w:val"), "single")
+        el.set(qn("w:sz"), "4")
+        el.set(qn("w:space"), "0")
+        el.set(qn("w:color"), "000000")
+        bordes.append(el)
+    tbl_pr.append(bordes)
+
+
+def _layout_fijo(tabla, anchos: tuple[int, ...]) -> None:
+    """Fija el ancho de cada columna (si no, Word las reparte a su gusto)."""
+    tabla.autofit = False
+    tbl_pr = tabla._tbl.tblPr
+
+    ancho_total = OxmlElement("w:tblW")
+    ancho_total.set(qn("w:w"), str(sum(anchos)))
+    ancho_total.set(qn("w:type"), "dxa")
+    for viejo in tbl_pr.findall(qn("w:tblW")):
+        tbl_pr.remove(viejo)
+    tbl_pr.append(ancho_total)
+
+    sangria = OxmlElement("w:tblInd")
+    sangria.set(qn("w:w"), str(SANGRIA_TABLA))
+    sangria.set(qn("w:type"), "dxa")
+    tbl_pr.append(sangria)
+
+    layout = OxmlElement("w:tblLayout")
+    layout.set(qn("w:type"), "fixed")
+    tbl_pr.append(layout)
+
+    for col, ancho in zip(tabla.columns, anchos):
+        col.width = Twips(ancho)
+
+
+def _ancho_celda(celda, ancho: int) -> None:
+    celda.width = Twips(ancho)
+
+
+def _formato_run(run, negrita=False, cursiva=False) -> None:
+    run.font.name = FUENTE
+    run._element.rPr.rFonts.set(qn("w:cs"), FUENTE)
+    run._element.rPr.rFonts.set(qn("w:hAnsi"), FUENTE)
+    run.font.size = TAMANO
+    run.bold = negrita
+    run.italic = cursiva
+
+
+def _escribir(celda, textos, *, negrita=False, cursiva=False,
+              centrado=False, prefijo="", espacio_despues=6) -> None:
+    """Escribe uno o varios párrafos dentro de una celda."""
+    if isinstance(textos, str):
+        textos = [textos]
+    if not textos:
+        textos = [""]
+    primero = True
+    for texto in textos:
+        parrafo = celda.paragraphs[0] if primero else celda.add_paragraph()
+        primero = False
+        parrafo.paragraph_format.space_after = Pt(espacio_despues)
+        parrafo.paragraph_format.space_before = Pt(0)
+        if centrado:
+            parrafo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = parrafo.add_run(f"{prefijo}{texto}" if texto else "")
+        _formato_run(run, negrita, cursiva)
+
+
+def _fila_encabezado(tabla, textos, anchos=None) -> None:
+    fila = tabla.add_row()
+    for celda, texto in zip(fila.cells, textos):
+        _sombrear(celda, COLOR_ENCABEZADO)
+        _escribir(celda, texto, negrita=True, cursiva=True, centrado=True,
+                  espacio_despues=0)
+
+
+def _fila_combinada(tabla, texto, *, sombreada=False, negrita=True,
+                    cursiva=True, centrado=True) -> None:
+    fila = tabla.add_row()
+    celda = fila.cells[0].merge(fila.cells[-1])
+    if sombreada:
+        _sombrear(celda, COLOR_ENCABEZADO)
+    _escribir(celda, texto, negrita=negrita, cursiva=cursiva,
+              centrado=centrado, espacio_despues=0)
+
+
+def _fila_contenido(tabla, actividad, recursos) -> None:
+    fila = tabla.add_row()
+    _escribir(fila.cells[0], actividad, cursiva=True)
+    _escribir(fila.cells[1], recursos, cursiva=True, prefijo="- ",
+              espacio_despues=3)
+
+
+def _aplicar_anchos(tabla, anchos) -> None:
+    for fila in tabla.rows:
+        for celda, ancho in zip(fila.cells, anchos):
+            _ancho_celda(celda, ancho)
+
+
+def _salto_de_pagina(documento) -> None:
+    documento.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
+
+
+# ---------------------------------------------------------------------------
+# Hojas
+# ---------------------------------------------------------------------------
+def _titulo_semana(documento, numero, semana: dict | None) -> None:
+    semana = semana or {}
+    del_ = semana.get("del") or "____________"
+    al = semana.get("al") or "______________"
+    de = semana.get("de") or "_________________"
+    p = documento.add_paragraph()
+    p.paragraph_format.space_after = Pt(6)
+    r1 = p.add_run(f"{numero}    ")
+    _formato_run(r1, negrita=True, cursiva=True)
+    r2 = p.add_run(f"Experiencia Grupal (grupo pequeño) semana {del_} al {al} de {de}")
+    _formato_run(r2, negrita=True, cursiva=True)
+
+
+def hoja_grupal(documento, dia: dict) -> None:
+    g = dia["grupal"]
+    _titulo_semana(documento, dia["numero"], dia.get("semana"))
+
+    tabla = documento.add_table(rows=0, cols=2)
+    tabla.alignment = WD_TABLE_ALIGNMENT.LEFT
+    _bordes_tabla(tabla)
+    _layout_fijo(tabla, COLS_GRUPAL)
+
+    # Grupo pequeño
+    pequeno = g["pequeno"]
+    _fila_encabezado(tabla, [pequeno.get("titulo", "Actividad Grupal (Expresión plástica)"),
+                             "Recursos"])
+    _fila_contenido(tabla, pequeno["actividad"], pequeno.get("recursos", []))
+
+    # Grupo grande
+    _fila_combinada(tabla, "Experiencia (Grupo Grande)")
+    _fila_encabezado(tabla, ["Actividad", "Recursos"])
+    _fila_contenido(tabla, g["grande"]["actividad"], g["grande"].get("recursos", []))
+
+    # Actividad grupal
+    _fila_combinada(
+        tabla,
+        "Actividad Grupal: Literatura Infantil, expresión musical, expresión "
+        "corporal, psicomotricidad, expresión plástica.",
+        sombreada=False, centrado=False,
+    )
+    ag = g["actividad_grupal"]
+    _fila_encabezado(tabla, [ag.get("titulo", "Actividad Grupal (Expresión Plástica)."),
+                             "Recursos"])
+    _fila_contenido(tabla, ag["actividad"], ag.get("recursos", []))
+
+    _aplicar_anchos(tabla, COLS_GRUPAL)
+
+
+def hoja_indicador(documento, dia: dict) -> None:
+    h = dia["hoja2"]
+    p = documento.add_paragraph()
+    _formato_run(p.add_run(str(dia["numero"])), negrita=True, cursiva=True)
+
+    contenidos = h.get("contenidos")
+    if contenidos:
+        anchos = COLS_INDICADOR_CONTENIDOS
+        encabezados = ["Indicadores", "Contenidos:", "Actividad", "Recursos"]
+    else:
+        anchos = COLS_INDICADOR
+        encabezados = ["Indicador de Logro", "Actividad", "Recursos"]
+
+    tabla = documento.add_table(rows=0, cols=len(anchos))
+    tabla.alignment = WD_TABLE_ALIGNMENT.LEFT
+    _bordes_tabla(tabla)
+    _layout_fijo(tabla, anchos)
+    _fila_encabezado(tabla, encabezados)
+
+    fila = tabla.add_row()
+    _escribir(fila.cells[0], h["indicador"], cursiva=True)
+    if contenidos:
+        celda = fila.cells[1]
+        etiquetas = (("conceptuales", "Conceptuales:"),
+                     ("procedimentales", "Procedimentales:"),
+                     ("actitudinales", "Actitudinales:"))
+        primero = True
+        for clave, etiqueta in etiquetas:
+            parrafo = celda.paragraphs[0] if primero else celda.add_paragraph()
+            primero = False
+            _formato_run(parrafo.add_run(etiqueta), negrita=True, cursiva=True)
+            for texto in contenidos.get(clave, []):
+                parrafo = celda.add_paragraph()
+                _formato_run(parrafo.add_run(texto), cursiva=True)
+        _escribir(fila.cells[2], h["actividad"])
+        _escribir(fila.cells[3], h.get("recursos", []), cursiva=True,
+                  prefijo="- ", espacio_despues=3)
+    else:
+        _escribir(fila.cells[1], h["actividad"])
+        _escribir(fila.cells[2], h.get("recursos", []), cursiva=True,
+                  prefijo="- ", espacio_despues=3)
+
+    # Altura mínima para que la tabla se vea completa, como en el original
+    tr_pr = fila._tr.get_or_add_trPr()
+    alto = OxmlElement("w:trHeight")
+    alto.set(qn("w:val"), "6500")
+    alto.set(qn("w:hRule"), "atLeast")
+    tr_pr.append(alto)
+
+    _aplicar_anchos(tabla, anchos)
+
+
+# ---------------------------------------------------------------------------
+# API pública
+# ---------------------------------------------------------------------------
+def _documento_base() -> Document:
+    doc = Document()
+    seccion = doc.sections[0]
+    seccion.orientation = WD_ORIENT.LANDSCAPE
+    seccion.page_width = Twips(ANCHO_PAGINA)
+    seccion.page_height = Twips(ALTO_PAGINA)
+    seccion.left_margin = seccion.right_margin = Twips(MARGEN_LATERAL)
+    seccion.top_margin = Twips(MARGEN_SUPERIOR)
+    seccion.bottom_margin = Twips(MARGEN_INFERIOR)
+
+    normal = doc.styles["Normal"]
+    normal.font.name = FUENTE
+    normal.font.size = TAMANO
+    normal.element.rPr.rFonts.set(qn("w:eastAsia"), FUENTE)
+    normal.paragraph_format.space_after = Pt(0)
+    return doc
+
+
+def generar_documento(datos: dict) -> Document:
+    """Construye el documento Word a partir de los datos."""
+    doc = _documento_base()
+    dias = datos["dias"]
+    for i, dia in enumerate(dias):
+        hoja_grupal(doc, dia)
+        _salto_de_pagina(doc)
+        hoja_indicador(doc, dia)
+        if i < len(dias) - 1:
+            _salto_de_pagina(doc)
+    return doc
+
+
+def generar_archivo(ruta_json: str | Path, ruta_docx: str | Path) -> Path:
+    """Lee un JSON de planificación y escribe el .docx."""
+    datos = json.loads(Path(ruta_json).read_text(encoding="utf-8"))
+    ruta_docx = Path(ruta_docx)
+    ruta_docx.parent.mkdir(parents=True, exist_ok=True)
+    generar_documento(datos).save(ruta_docx)
+    return ruta_docx
