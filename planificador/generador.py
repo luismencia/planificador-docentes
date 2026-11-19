@@ -17,7 +17,7 @@ from pathlib import Path
 from docx import Document
 from docx.enum.section import WD_ORIENT
 from docx.enum.table import WD_TABLE_ALIGNMENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, Twips
@@ -155,19 +155,16 @@ def _aplicar_anchos(tabla, anchos) -> None:
             _ancho_celda(celda, ancho)
 
 
-def _salto_de_pagina(documento) -> None:
-    documento.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
-
-
 # ---------------------------------------------------------------------------
 # Hojas
 # ---------------------------------------------------------------------------
-def _titulo_semana(documento, numero, semana: dict | None) -> None:
+def _titulo_semana(documento, numero, semana: dict | None, nueva_pagina=False) -> None:
     semana = semana or {}
     del_ = semana.get("del") or "____________"
     al = semana.get("al") or "______________"
     de = semana.get("de") or "_________________"
     p = documento.add_paragraph()
+    p.paragraph_format.page_break_before = nueva_pagina
     p.paragraph_format.space_after = Pt(6)
     r1 = p.add_run(f"{numero}    ")
     _formato_run(r1, negrita=True, cursiva=True)
@@ -175,9 +172,9 @@ def _titulo_semana(documento, numero, semana: dict | None) -> None:
     _formato_run(r2, negrita=True, cursiva=True)
 
 
-def hoja_grupal(documento, dia: dict) -> None:
+def hoja_grupal(documento, dia: dict, nueva_pagina=False) -> None:
     g = dia["grupal"]
-    _titulo_semana(documento, dia["numero"], dia.get("semana"))
+    _titulo_semana(documento, dia["numero"], dia.get("semana"), nueva_pagina)
 
     tabla = documento.add_table(rows=0, cols=2)
     tabla.alignment = WD_TABLE_ALIGNMENT.LEFT
@@ -213,6 +210,7 @@ def hoja_grupal(documento, dia: dict) -> None:
 def hoja_indicador(documento, dia: dict) -> None:
     h = dia["hoja2"]
     p = documento.add_paragraph()
+    p.paragraph_format.page_break_before = True
     _formato_run(p.add_run(str(dia["numero"])), negrita=True, cursiva=True)
 
     contenidos = h.get("contenidos")
@@ -288,11 +286,8 @@ def generar_documento(datos: dict) -> Document:
     doc = _documento_base()
     dias = datos["dias"]
     for i, dia in enumerate(dias):
-        hoja_grupal(doc, dia)
-        _salto_de_pagina(doc)
+        hoja_grupal(doc, dia, nueva_pagina=(i > 0))
         hoja_indicador(doc, dia)
-        if i < len(dias) - 1:
-            _salto_de_pagina(doc)
     return doc
 
 
