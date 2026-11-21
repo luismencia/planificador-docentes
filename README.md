@@ -6,6 +6,7 @@ con el diseño exacto que exige la escuela, a partir de datos estructurados.
 ## Estado del proyecto
 - [x] Fase 1: generador de Word desde JSON
 - [x] Fase 2: importar el Word actual a datos
+- [x] Fase 2b: hoja del esquema mensual (datos generales, tema y cuadro ¿Qué sabemos?)
 - [ ] Fase 3: formulario web (celular)
 - [ ] Fase 4: foto de la hoja -> formulario (IA con visión)
 - [ ] Fase 5: plantillas para otros formatos de planificación

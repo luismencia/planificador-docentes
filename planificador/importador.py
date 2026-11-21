@@ -16,11 +16,32 @@ import re
 from pathlib import Path
 
 from docx import Document
+from docx.text.paragraph import Paragraph
 
 TITULO_PEQUENO = "Actividad Grupal (Expresión plástica)"
 TITULO_GRUPAL = "Actividad Grupal (Expresión Plástica)."
 
 CONTENIDOS = ("conceptuales", "procedimentales", "actitudinales")
+
+# Etiqueta que aparece en el Word -> clave en los datos
+ETIQUETAS_GENERALES = {
+    "Centro Educativo": "centro",
+    "Docente": "docente",
+    "Regional": "regional",
+    "Distrito": "distrito",
+    "Grado": "grado",
+    "Sección": "seccion",
+    "Tanda": "tanda",
+    "Nombre Lúdico": "nombre_ludico",
+    "Fecha de inicio": "fecha_inicio",
+    "Fecha de cierre": "fecha_cierre",
+    "Tipo de planificación": "tipo",
+    "Tema": "tema",
+}
+# Una etiqueta solo cuenta si termina en ":" (así "Docente de Ejemplo" no se
+# confunde). Excepción: "Grado" al inicio de línea, que en tu Word va sin ":".
+_NOMBRES = "|".join(map(re.escape, ETIQUETAS_GENERALES))
+_PATRON_ETIQUETA = re.compile(rf"\b({_NOMBRES})\s*:|^(Grado)\b\s*:?")
 
 
 # ---------------------------------------------------------------------------
@@ -111,9 +132,45 @@ def _leer_indicador(tabla) -> dict:
     return hoja
 
 
+def _limpiar_valor(valor: str) -> str:
+    """Quita espacios y las rayas '____' que usan como espacio en blanco."""
+    return valor.strip().strip("_").strip()
+
+
+def _leer_generales(lineas: list[str]) -> dict:
+    """Convierte las líneas 'Etiqueta: valor   Etiqueta: valor' en un diccionario.
+
+    Si una etiqueta aparece repetida, gana la última (en tu Word, 'Nombre
+    Lúdico' sale en la línea 2 y otra vez junto al Tema; la buena es la última).
+    """
+    generales = {}
+    for linea in lineas:
+        linea = " ".join(linea.split())
+        coincidencias = list(_PATRON_ETIQUETA.finditer(linea))
+        for i, m in enumerate(coincidencias):
+            fin = coincidencias[i + 1].start() if i + 1 < len(coincidencias) else len(linea)
+            etiqueta = m.group(1) or m.group(2)
+            generales[ETIQUETAS_GENERALES[etiqueta]] = _limpiar_valor(linea[m.end():fin])
+    return generales
+
+
+def _lineas_antes_de(tabla) -> list[str]:
+    """Textos de los párrafos que están justo encima de una tabla."""
+    lineas = []
+    for hermano in tabla._tbl.itersiblings(preceding=True):
+        if hermano.tag.endswith("}tbl"):
+            break
+        # Paragraph.text lee solo el texto visible (itertext trae contenido duplicado)
+        texto = Paragraph(hermano, tabla._parent).text.strip() if hermano.tag.endswith("}p") else ""
+        if texto:
+            lineas.append(texto)
+    return lineas[::-1]
+
+
 def _leer_mensual(tabla_tema, tabla_kwl) -> dict:
     kwl = _celdas_unicas(tabla_kwl.rows[1])
     return {
+        "generales": _leer_generales(_lineas_antes_de(tabla_tema)),
         "seleccion_tema": _texto(tabla_tema.rows[1].cells[0]),
         "que_sabemos": _recursos(kwl[0]),
         "que_queremos_saber": _recursos(kwl[1]),

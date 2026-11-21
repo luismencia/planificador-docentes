@@ -28,3 +28,14 @@ def test_importa_contenidos_por_categoria(tmp_path):
     ultimo = importar_documento(ruta)["dias"][-1]["hoja2"]
     assert ultimo["contenidos"]["conceptuales"] == ["La Conversación."]
     assert "actitudinales" in ultimo["contenidos"]
+
+
+def test_ida_y_vuelta_del_esquema_mensual(tmp_path):
+    original = json.loads(EJEMPLO.read_text(encoding="utf-8"))
+    ruta = tmp_path / "mensual.docx"
+    generar_documento(original).save(ruta)
+
+    recuperado = importar_documento(ruta)["mensual"]
+
+    # los datos en blanco (tanda, fechas) deben volver como texto vacío
+    assert recuperado == original["mensual"]

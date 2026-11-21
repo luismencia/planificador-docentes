@@ -96,17 +96,19 @@ def _ancho_celda(celda, ancho: int) -> None:
     celda.width = Twips(ancho)
 
 
-def _formato_run(run, negrita=False, cursiva=False) -> None:
+def _formato_run(run, negrita=False, cursiva=False, subrayado=False, tamano=None) -> None:
     run.font.name = FUENTE
     run._element.rPr.rFonts.set(qn("w:cs"), FUENTE)
     run._element.rPr.rFonts.set(qn("w:hAnsi"), FUENTE)
-    run.font.size = TAMANO
+    run.font.size = tamano or TAMANO
     run.bold = negrita
     run.italic = cursiva
+    run.underline = subrayado
 
 
 def _escribir(celda, textos, *, negrita=False, cursiva=False,
-              centrado=False, prefijo="", espacio_despues=6) -> None:
+              centrado=False, prefijo="", espacio_despues=6,
+              tamano=None, justificado=False) -> None:
     """Escribe uno o varios párrafos dentro de una celda."""
     if isinstance(textos, str):
         textos = [textos]
@@ -120,8 +122,10 @@ def _escribir(celda, textos, *, negrita=False, cursiva=False,
         parrafo.paragraph_format.space_before = Pt(0)
         if centrado:
             parrafo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        elif justificado:
+            parrafo.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         run = parrafo.add_run(f"{prefijo}{texto}" if texto else "")
-        _formato_run(run, negrita, cursiva)
+        _formato_run(run, negrita, cursiva, tamano=tamano)
 
 
 def _fila_encabezado(tabla, textos, anchos=None) -> None:
@@ -261,6 +265,110 @@ def hoja_indicador(documento, dia: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Esquema mensual (datos generales + selección del tema + cuadro ¿Qué sabemos?)
+# ---------------------------------------------------------------------------
+TAM_GENERALES = Pt(13)
+TAM_ENCABEZADO_MENSUAL = Pt(14)
+RAYA = "_________"  # lo que se muestra cuando un dato está en blanco
+
+# Cada línea de los datos generales: lista de (etiqueta, clave del JSON)
+LINEAS_GENERALES = (
+    (("Centro Educativo", "centro"), ("Docente", "docente"),
+     ("Regional", "regional"), ("Distrito", "distrito")),
+    (("Grado", "grado"), ("Sección", "seccion"), ("Tanda", "tanda")),
+    (("Fecha de inicio", "fecha_inicio"), ("Fecha de cierre", "fecha_cierre"),
+     ("Tipo de planificación", "tipo")),
+    (("Tema", "tema"), ("Nombre Lúdico", "nombre_ludico")),
+)
+
+
+def _altura_minima(fila, twips: int) -> None:
+    tr_pr = fila._tr.get_or_add_trPr()
+    alto = OxmlElement("w:trHeight")
+    alto.set(qn("w:val"), str(twips))
+    alto.set(qn("w:hRule"), "atLeast")
+    tr_pr.append(alto)
+
+
+def _sangria_tabla(tabla, anchos, sangria: int) -> None:
+    """Como _layout_fijo, pero con sangría propia."""
+    _layout_fijo(tabla, anchos)
+    for el in tabla._tbl.tblPr.findall(qn("w:tblInd")):
+        el.set(qn("w:w"), str(sangria))
+
+
+def _linea_general(documento, campos: list[tuple[str, str]], primera: bool,
+                   nueva_pagina: bool) -> None:
+    p = documento.add_paragraph()
+    p.paragraph_format.left_indent = Twips(680)
+    p.paragraph_format.right_indent = Twips(680)
+    p.paragraph_format.space_after = Pt(4)
+    if primera:
+        p.paragraph_format.page_break_before = nueva_pagina
+    for i, (etiqueta, valor) in enumerate(campos):
+        if i:
+            _formato_run(p.add_run("    "), tamano=TAM_GENERALES)
+        _formato_run(p.add_run(f"{etiqueta}: "), negrita=True, cursiva=True,
+                     tamano=TAM_GENERALES)
+        _formato_run(p.add_run(valor or RAYA), cursiva=True, subrayado=True,
+                     tamano=TAM_GENERALES)
+
+
+def hoja_esquema(documento, mensual: dict, nueva_pagina=False) -> None:
+    """Datos generales y el recuadro 'Planificación mensual'."""
+    generales = mensual.get("generales", {})
+    for n, linea in enumerate(LINEAS_GENERALES):
+        campos = [(etiqueta, generales.get(clave, "")) for etiqueta, clave in linea]
+        _linea_general(documento, campos, primera=(n == 0), nueva_pagina=nueva_pagina)
+
+    documento.add_paragraph()
+    anchos = (14734,)
+    tabla = documento.add_table(rows=0, cols=1)
+    _bordes_tabla(tabla)
+    _sangria_tabla(tabla, anchos, 137)
+
+    encabezado = tabla.add_row()
+    _sombrear(encabezado.cells[0], COLOR_ENCABEZADO)
+    _escribir(encabezado.cells[0], "Planificación mensual", negrita=True,
+              cursiva=True, tamano=TAM_ENCABEZADO_MENSUAL, espacio_despues=0)
+
+    cuerpo = tabla.add_row()
+    _escribir(cuerpo.cells[0], mensual.get("seleccion_tema", ""), negrita=True,
+              cursiva=True, justificado=True)
+    _altura_minima(cuerpo, 2369)
+    _aplicar_anchos(tabla, anchos)
+
+
+def hoja_kwl(documento, mensual: dict, nueva_pagina=True) -> None:
+    """Cuadro ¿Qué sabemos? / ¿Qué queremos saber? / ¿Cómo lo vamos a saber?"""
+    p = documento.add_paragraph()
+    p.paragraph_format.page_break_before = nueva_pagina
+    p.paragraph_format.space_after = Pt(0)
+
+    anchos = (4111, 5103, 5528)
+    tabla = documento.add_table(rows=0, cols=3)
+    _bordes_tabla(tabla)
+    _sangria_tabla(tabla, anchos, 137)
+
+    fila = tabla.add_row()
+    titulos = ("¿Qué sabemos sobre el tema?", "¿Qué queremos saber?",
+               "¿Cómo lo vamos a saber?")
+    for celda, titulo in zip(fila.cells, titulos):
+        _sombrear(celda, COLOR_ENCABEZADO)
+        _escribir(celda, titulo, negrita=True, cursiva=True, centrado=True,
+                  tamano=TAM_ENCABEZADO_MENSUAL, espacio_despues=0)
+
+    cuerpo = tabla.add_row()
+    columnas = (("que_sabemos", False), ("que_queremos_saber", True),
+                ("como_lo_vamos_a_saber", False))
+    for celda, (clave, negrita) in zip(cuerpo.cells, columnas):
+        _escribir(celda, mensual.get(clave, []), negrita=negrita, cursiva=True,
+                  prefijo="- ", espacio_despues=14)
+    _altura_minima(cuerpo, 5000)
+    _aplicar_anchos(tabla, anchos)
+
+
+# ---------------------------------------------------------------------------
 # API pública
 # ---------------------------------------------------------------------------
 def _documento_base() -> Document:
@@ -285,8 +393,13 @@ def generar_documento(datos: dict) -> Document:
     """Construye el documento Word a partir de los datos."""
     doc = _documento_base()
     dias = datos["dias"]
+    mensual = datos.get("mensual")
+    if mensual:
+        hoja_esquema(doc, mensual)
+        hoja_kwl(doc, mensual)
     for i, dia in enumerate(dias):
-        hoja_grupal(doc, dia, nueva_pagina=(i > 0))
+        # la primera hoja grupal sale en página nueva solo si hay esquema antes
+        hoja_grupal(doc, dia, nueva_pagina=(i > 0 or bool(mensual)))
         hoja_indicador(doc, dia)
     return doc
 

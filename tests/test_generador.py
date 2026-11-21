@@ -15,7 +15,8 @@ def _datos():
 def test_cada_dia_genera_dos_tablas():
     datos = _datos()
     doc = generar_documento(datos)
-    assert len(doc.tables) == 2 * len(datos["dias"])
+    # 2 tablas por día + 2 del esquema mensual (recuadro y cuadro ¿Qué sabemos?)
+    assert len(doc.tables) == 2 * len(datos["dias"]) + 2
 
 
 def test_hoja_con_contenidos_tiene_cuatro_columnas():
@@ -31,3 +32,20 @@ def test_el_texto_aparece_en_el_documento(tmp_path):
     texto = "\n".join(c.text for t in Document(ruta).tables for f in t.rows for c in f.cells)
     assert "Cumplen con sus deberes" in texto
     assert "Cinta pegante" in texto
+
+
+def test_esquema_mensual_aparece_primero(tmp_path):
+    doc = generar_documento(_datos())
+    ruta = tmp_path / "m.docx"
+    doc.save(ruta)
+    texto = "\n".join(p.text for p in Document(ruta).paragraphs)
+    assert "Centro Educativo: Centro Educativo Ejemplo" in texto
+    assert "Tanda: _________" in texto  # dato en blanco -> raya
+    primera_tabla = Document(ruta).tables[0]
+    assert primera_tabla.rows[0].cells[0].text == "Planificación mensual"
+
+
+def test_sin_mensual_no_agrega_hojas():
+    datos = _datos()
+    datos.pop("mensual")
+    assert len(generar_documento(datos).tables) == 2 * len(datos["dias"])
